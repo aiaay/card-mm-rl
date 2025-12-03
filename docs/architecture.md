@@ -109,22 +109,23 @@ Toggles and persistence:
 Events filter the eligible deck or remap a rank’s value before hint sampling and posterior calculation.
 
 ### 2.3 Quotes
-Let \(S_t\) be the sum of the 3 cards. Given hints & event:
-- Compute posterior moments: mu equals expected S given information, sigma_S equals standard deviation of S given information; \(\mu_t = E[S_t|\cdot],\ \sigma_{S,t} = \sqrt{Var[S_t|\cdot]}\). Use without-replacement corrections in `quotes.py`.
+Let \($S_t$\) be the sum of the 3 cards. Given hints & event:
+- Compute posterior moments: mu equals expected S given information, sigma_S equals standard deviation of S given information; \($\mu_t = E[S_t|\cdot]$, $\sigma_{S,t} = \sqrt{Var[S_t|\cdot]}$). Use without-replacement corrections in `quotes.py`.
 - Spread rule: spread equals clip s0 plus beta times sigma_S, within s_min and s_max; `spread_t = clip(s0 + beta * sigma_{S,t}, s_min, s_max)`
-- Mid rule noisy oracle: mid equals mu plus Gaussian noise with variance sigma_q squared; `mid_t = mu_t + ε_t`, \(ε_t\sim\mathcal{N}(0,\sigma_q^2)\)
+- Mid rule noisy oracle: mid equals mu plus Gaussian noise with variance sigma_q squared; `mid_t = mu_t + ε_t`, \($ε_t\sim\mathcal{N}(0,\sigma_q^2)$)
 - Bid and Ask: X equals mid minus half of spread, Y equals mid plus half of spread; `X_t = mid_t - spread_t/2`, `Y_t = mid_t + spread_t/2`
 
+
 ### 2.4 Liquidity displayed versus hidden
-- Nominal depth scale: L_bar equals k divided by sigma_S times spread plus epsilon; \(\bar L_t = \kappa / (\sigma_{S,t} (\text{spread}_t + \varepsilon))\)
+- Nominal depth scale: L_bar equals k divided by sigma_S times spread plus epsilon; \($\bar L_t = \kappa / (\sigma_{S,t} (\text{spread}_t + \varepsilon))$\)
 - **True depth** (per side) drawn lognormally: `L_true ~ LogNormal(mean=ln(\bar L_t) - 0.5 τ^2, sigma=τ)`; clip to `[L_min, L_max]`.
 - **Displayed depth**: `D_disp = min(L_true, L_cap)` is **observable** in the state.
 
 ### 2.5 Execution and Impact no pro-rata fills
-- Aggregate taker demand per side, e.g., total buy size \(q_{buy} = i_1 + i_2\) in two‑player.
+- Aggregate taker demand per side, e.g., total buy size $q_{buy} = i_1 + i_2$ in two‑player.
 - Toggleable impact:
   - flags.enable_impact true or false. If false, all fills execute at quoted prices Y for buys, X for sells regardless of overflow. Use this for ablations.
-  - If true and \(q_{buy} ≤ L_{true}\): all buy fills @ `Y_t`.
+  - If true and $q_{buy} ≤ L_{true}$: all buy fills @ `Y_t`.
   - If true and overflow q_ov equals q_buy minus true depth and is greater than zero: linear impact with a single executed price for all buyers: `p_exec_buy = Y_t + α * q_ov`. Symmetric for sells with p_exec_sell equals `X_t` minus alpha times q_ov.
 
 ### 2.6 Valid Orders and Budget
@@ -134,9 +135,9 @@ Let \(S_t\) be the sum of the 3 cards. Given hints & event:
 - Invalid actions masked out in the policy.
 
 ### 2.7 Rewards and Settlement
-- After execution, reveal \(S_t\).
-- Buy P&L: \(r_t = i (S_t - p^{buy}_{exec})\). Sell: \(r_t = i (p^{sell}_{exec} - S_t)\). Pass: 0.
-- Update budget to \(W_{t+1}\); optional stop‑out if \(W_t\) falls below threshold.
+- After execution, reveal $S_t$.
+- Buy P&L: $r_t = i (S_t - p^{buy}_{exec})$. Sell P&L: $r_t = i (p^{sell}_{exec} - S_t)$. Pass: 0.
+- Update budget to $W_{t+1}$; optional stop‑out if $W_t$ falls below threshold.
 - Episode length: 10 rounds.
 
 ### 2.8 Single vs Two-Player
@@ -168,7 +169,7 @@ Let \(S_t\) be the sum of the 3 cards. Given hints & event:
 ## 4) Baselines
 
 ### 4.1 Level-0 Myopic EV Oracle
-- Compute \(\mu_t\). Directional rule: buy if \(\mu_t − Y_t > 0\), sell if \(X_t − \mu_t > 0\), else pass.
+- Compute $\mu_t$. Directional rule: buy if $\mu_t − Y_t > 0$, sell if $X_t − \mu_t > 0$, else pass.
 - Sizing: (a) max valid size; (b) fraction‑Kelly using per‑unit mean/variance; or (c) fixed small size.
 
 ### 4.2 Level-1 Crowding-Aware
@@ -345,5 +346,5 @@ def ev_action(mu, x_bid, y_ask, W, smax, sizing="max"):
 ---
 
 ## 15) License and Citation
-- MIT License by default. Include a short citation in README for academic use.
+- MIT License
 
