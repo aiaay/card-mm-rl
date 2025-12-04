@@ -10,3 +10,4 @@ matplotlib
 ruff
 black
 pre-commit
+streamlit

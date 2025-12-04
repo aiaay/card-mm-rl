@@ -95,10 +95,27 @@ class SingleCardEnv(gym.Env):
         self.true_sum = sum([value_map[c] for c in self.hidden_cards])
         
         # 3. Hints
-        n_hints = self._get_cfg("hints.count", self.rng.randint(0, 4))
-        n_hints = min(n_hints, 3)
+        hints_cfg = self._get_cfg("hints", {})
+        forced_hint_count = None
+        if isinstance(hints_cfg, dict):
+            forced_hint_count = hints_cfg.get("count")
+        if forced_hint_count is not None:
+            n_hints = int(forced_hint_count)
+        else:
+            probs = None
+            if isinstance(hints_cfg, dict):
+                probs = hints_cfg.get("probabilities")
+            if probs is not None:
+                probs = np.array(probs, dtype=float)
+                if probs.shape[0] != 4 or probs.sum() <= 0:
+                    probs = None
+            if probs is None:
+                probs = np.array([0.35, 0.30, 0.20, 0.15])
+            probs = probs / probs.sum()
+            n_hints = int(self.rng.choice([0, 1, 2, 3], p=probs))
+        n_hints = max(0, min(n_hints, 3))
         
-        hint_indices = self.rng.choice(3, size=n_hints, replace=False)
+        hint_indices = self.rng.choice(3, size=n_hints, replace=False) if n_hints > 0 else []
         self.hints = [self.hidden_cards[i] for i in hint_indices]
         
         # 4. Posterior & Quote

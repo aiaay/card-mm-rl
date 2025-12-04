@@ -239,12 +239,16 @@ class TwoPlayerCardEnv(gym.Env):
             terminated = True
             
         # Info
+        # Include masks so that downstream agents (e.g. IPPO) can always
+        # access valid-action masks, even on terminal transitions.
         step_info = {
             "exec_price_buy": p_exec_buy,
             "exec_price_sell": p_exec_sell,
             "q_buy_total": q_buy,
             "q_sell_total": q_sell,
-            "true_sum": self.true_sum
+            "true_sum": self.true_sum,
+            "mask_a": mask_a,
+            "mask_b": mask_b,
         }
         
         # Logs

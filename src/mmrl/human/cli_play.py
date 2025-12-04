@@ -76,9 +76,17 @@ def run_game(mode: str, events: bool, impact: bool, opponent_type: str = "random
     cfg = {
         "W0": 500.0,
         "episode_length": 10,
+        "event_persist": 0.2,
+        "events": {
+            "none": 0.5,
+            "ge10_only": 0.2,
+            "le7_only": 0.1,
+            "even_only": 0.1,
+            "remap_value": 0.1,
+        },
         "flags": {
             "enable_events": events,
-            "enable_impact": impact
+            "enable_impact": impact,
         },
         # "hints": {"count": 2} # Remove to allow random 0..3
     }
