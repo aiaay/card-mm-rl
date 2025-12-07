@@ -1,7 +1,7 @@
 import argparse
+import os
 import numpy as np
 import torch
-import os
 from torch.utils.tensorboard import SummaryWriter
 from mmrl.env.single_env import SingleCardEnv
 from mmrl.agents.dqn.dqn_agent import DQNAgent
@@ -9,7 +9,7 @@ from mmrl.env.spaces import get_obs_shape, ACTION_SPACE_SIZE
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--episodes", type=int, default=1000)
+    parser.add_argument("--episodes", type=int, default=1200)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--log-dir", type=str, default="data/logs/dqn")
     parser.add_argument("--checkpoint-dir", type=str, default="data/models/dqn")
@@ -17,9 +17,15 @@ def main():
     
     # Config
     cfg = {
-        "episode_length": 10,
+        # Longer horizon to allow more actions per episode
+        "episode_length": 20,
         "W0": 500.0,
-        "flags": {"enable_events": True, "enable_impact": True}
+        # Start with impact off during exploration
+        "flags": {"enable_events": True, "enable_impact": False},
+        # Softer stop-out threshold
+        "stop_out": 0.1,
+        # Incentive to trade
+        "pass_penalty": 0.05
     }
     
     env = SingleCardEnv(cfg)
@@ -27,14 +33,15 @@ def main():
     agent_cfg = {
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "gamma": 0.99,
-        "batch_size": 32,
+        "batch_size": 64,
         "lr": 1e-3,
         "epsilon_start": 1.0,
         "epsilon_min": 0.1,
-        "epsilon_decay": 0.995,
-        "buffer_size": 10000,
+        # Slower decay to keep exploring longer
+        "epsilon_decay": 0.999,
+        "buffer_size": 20000,
         "hidden_dims": [64, 64],
-        "target_update_freq": 100
+        "target_update_freq": 200,
     }
     
     agent = DQNAgent(get_obs_shape()[0], ACTION_SPACE_SIZE, agent_cfg)
@@ -96,6 +103,13 @@ def main():
     
     writer.close()
     print(f"DQN Training finished. Logs: {args.log_dir}, Models: {args.checkpoint_dir}")
+
+    # Save trained Q-network
+    save_dir = os.path.join("data", "models", "dqn")
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = os.path.join(save_dir, "dqn_final.pt")
+    torch.save(agent.q_net.state_dict(), save_path)
+    print(f"Saved DQN model to {save_path}")
 
 if __name__ == "__main__":
     main()
