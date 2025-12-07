@@ -43,6 +43,10 @@ class SingleCardEnv(gym.Env):
         self.mu = 0.0
         self.sigma = 0.0
         
+        # Pass tracking
+        self.consecutive_passes = 0
+        self.max_consecutive_passes = self._get_cfg("max_consecutive_passes", 3)
+        
     def _get_cfg(self, key, default=None):
         # Helper to access nested dict config
         keys = key.split(".")
@@ -70,8 +74,21 @@ class SingleCardEnv(gym.Env):
         self.W = self.W0
         self.metrics = {} # Clear metrics
         self.current_event = None
+        self.consecutive_passes = 0
+        self.max_consecutive_passes = self._get_cfg("max_consecutive_passes", 3)
         
         return self._start_round()
+
+    def _get_current_mask(self):
+        mask = get_action_mask(self.W, self.quote.bid, self.quote.ask, self.current_event)
+        
+        # Enforce consecutive pass limit
+        if self.consecutive_passes >= self.max_consecutive_passes:
+            # Check if any other action is possible
+            if np.sum(mask[1:]) > 0:
+                mask[0] = False # Forbid pass
+                
+        return mask
 
     def _start_round(self) -> Tuple[np.ndarray, Dict[str, Any]]:
         """
@@ -153,7 +170,7 @@ class SingleCardEnv(gym.Env):
             "hidden_cards": self.hidden_cards,
             "true_sum": self.true_sum,
             "true_depths": self.true_depths,
-            "mask": get_action_mask(self.W, self.quote.bid, self.quote.ask, self.current_event)
+            "mask": self._get_current_mask()
         }
         
         return obs, info
@@ -163,10 +180,21 @@ class SingleCardEnv(gym.Env):
         # 0: Pass, 1..10: Buy, 11..20: Sell
         
         # Retrieve Mask to check validity
-        mask = get_action_mask(self.W, self.quote.bid, self.quote.ask, self.current_event)
+        mask = self._get_current_mask()
         
         if not mask[action]:
-            action = 0
+            # Force valid action
+            # If tried to pass but forbidden, force action 0? No, Mask forbids 0.
+            # If action invalid, env usually forces 0 (Pass).
+            # But if Pass is forbidden, what do we force?
+            # Random valid? Or just fallback to 0 and take penalty?
+            # Let's fallback to 0 but if 0 is masked, pick random valid.
+            
+            valid_indices = np.where(mask)[0]
+            if len(valid_indices) > 0:
+                action = int(self.rng.choice(valid_indices))
+            else:
+                action = 0 # Should not happen if W > 0
             
         reward = 0.0
         p_exec = 0.0
@@ -175,25 +203,31 @@ class SingleCardEnv(gym.Env):
         
         enable_impact = self._get_cfg("flags.enable_impact", False)
         alpha = self._get_cfg("alpha", 0.3)
+        pass_penalty = self._get_cfg("pass_penalty", 0.0)
         
         if action == 0:
             # Pass
-            reward = 0.0
+            self.consecutive_passes += 1
+            # Escalating penalty still applies if they manage to pass (e.g. no money)
+            current_penalty = pass_penalty * (1.0 + 0.5 * (self.consecutive_passes - 1))
+            reward = -current_penalty
             p_exec = self.quote.mid
             
-        elif 1 <= action <= 10:
-            # Buy
-            side = 1
-            size = float(action)
-            p_exec = exec_price_buy(self.quote.ask, size, self.true_depths[1], alpha, enable_impact)
-            reward = size * (self.true_sum - p_exec)
+        else:
+            self.consecutive_passes = 0
+            if 1 <= action <= 10:
+                # Buy
+                side = 1
+                size = float(action)
+                p_exec = exec_price_buy(self.quote.ask, size, self.true_depths[1], alpha, enable_impact)
+                reward = size * (self.true_sum - p_exec)
             
-        elif 11 <= action <= 20:
-            # Sell
-            side = -1
-            size = float(action - 10)
-            p_exec = exec_price_sell(self.quote.bid, size, self.true_depths[0], alpha, enable_impact)
-            reward = size * (p_exec - self.true_sum)
+            elif 11 <= action <= 20:
+                # Sell
+                side = -1
+                size = float(action - 10)
+                p_exec = exec_price_sell(self.quote.bid, size, self.true_depths[0], alpha, enable_impact)
+                reward = size * (p_exec - self.true_sum)
             
         # Update Budget
         self.W += reward
@@ -232,7 +266,8 @@ class SingleCardEnv(gym.Env):
             "slippage": slippage,
             "true_sum": self.true_sum,
             "action": action,
-            "budget": self.W
+            "budget": self.W,
+            "consecutive_passes": self.consecutive_passes
         }
         
         # State info for logging (needs values from START of step usually, but t has incremented)

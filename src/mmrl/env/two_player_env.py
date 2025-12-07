@@ -36,6 +36,11 @@ class TwoPlayerCardEnv(gym.Env):
         self.last_act_a = {"side": 0.0, "size": 0.0}
         self.last_act_b = {"side": 0.0, "size": 0.0}
         
+        # Consecutive pass counters
+        self.passes_a = 0
+        self.passes_b = 0
+        self.max_consecutive_passes = self._get_cfg("max_consecutive_passes", 3)
+        
         # Metrics
         self.metrics_a = {}
         self.metrics_b = {}
@@ -70,9 +75,12 @@ class TwoPlayerCardEnv(gym.Env):
         self.W_b = self.W0
         self.last_act_a = {"side": 0.0, "size": 0.0}
         self.last_act_b = {"side": 0.0, "size": 0.0}
+        self.passes_a = 0
+        self.passes_b = 0
         self.metrics_a = {}
         self.metrics_b = {}
         self.current_event = None
+        self.max_consecutive_passes = self._get_cfg("max_consecutive_passes", 3)
         
         return self._start_round()
 
@@ -81,6 +89,21 @@ class TwoPlayerCardEnv(gym.Env):
         n_hints = min(n_hints, 3)
         indices = self.rng.choice(3, size=n_hints, replace=False)
         return [hidden_cards[i] for i in indices]
+
+    def _get_mask(self, agent_idx: int) -> np.ndarray:
+        """Helper to get current action mask for an agent (0 or 1)."""
+        if agent_idx == 0:
+            mask = get_action_mask(self.W_a, self.quote.bid, self.quote.ask, self.current_event)
+            if self.passes_a >= self.max_consecutive_passes:
+                if np.sum(mask[1:]) > 0: mask[0] = False
+            return mask
+        elif agent_idx == 1:
+            mask = get_action_mask(self.W_b, self.quote.bid, self.quote.ask, self.current_event)
+            if self.passes_b >= self.max_consecutive_passes:
+                if np.sum(mask[1:]) > 0: mask[0] = False
+            return mask
+        else:
+            raise ValueError("Agent index must be 0 or 1")
 
     def _start_round(self) -> Tuple[Tuple[np.ndarray, np.ndarray], Dict[str, Any]]:
         # 1. Event
@@ -135,20 +158,11 @@ class TwoPlayerCardEnv(gym.Env):
             "sigma": self.sigma,
             "event": self.current_event.to_dict(),
             "true_sum": self.true_sum,
-            "mask_a": get_action_mask(self.W_a, self.quote.bid, self.quote.ask, self.current_event),
-            "mask_b": get_action_mask(self.W_b, self.quote.bid, self.quote.ask, self.current_event)
+            "mask_a": self._get_mask(0),
+            "mask_b": self._get_mask(1)
         }
         
         return (obs_a, obs_b), info
-    
-    def _get_mask(self, agent_idx: int) -> np.ndarray:
-        """Helper to get current action mask for an agent (0 or 1)."""
-        if agent_idx == 0:
-            return get_action_mask(self.W_a, self.quote.bid, self.quote.ask, self.current_event)
-        elif agent_idx == 1:
-            return get_action_mask(self.W_b, self.quote.bid, self.quote.ask, self.current_event)
-        else:
-            raise ValueError("Agent index must be 0 or 1")
 
     def step(
         self, 
@@ -158,13 +172,18 @@ class TwoPlayerCardEnv(gym.Env):
         act_a, act_b = actions
         
         # Mask validation
-        mask_a = get_action_mask(self.W_a, self.quote.bid, self.quote.ask, self.current_event)
+        mask_a = self._get_mask(0)
         if not mask_a[act_a]:
-            act_a = 0
+            # Force random valid if available, else 0
+            valid_a = np.where(mask_a)[0]
+            if len(valid_a) > 0: act_a = int(self.rng.choice(valid_a))
+            else: act_a = 0
             
-        mask_b = get_action_mask(self.W_b, self.quote.bid, self.quote.ask, self.current_event)
+        mask_b = self._get_mask(1)
         if not mask_b[act_b]:
-            act_b = 0
+            valid_b = np.where(mask_b)[0]
+            if len(valid_b) > 0: act_b = int(self.rng.choice(valid_b))
+            else: act_b = 0
             
         # Decode actions
         # 0=Pass, 1..10=Buy, 11..20=Sell
@@ -190,19 +209,32 @@ class TwoPlayerCardEnv(gym.Env):
         # Execute
         enable_impact = self._get_cfg("flags.enable_impact", False)
         alpha = self._get_cfg("alpha", 0.3)
+        pass_penalty = self._get_cfg("pass_penalty", 0.0)
         
         p_exec_buy = exec_price_buy(self.quote.ask, q_buy, self.true_depths[1], alpha, enable_impact)
         p_exec_sell = exec_price_sell(self.quote.bid, q_sell, self.true_depths[0], alpha, enable_impact)
         
+        # Update pass counters
+        if side_a == 0: self.passes_a += 1
+        else: self.passes_a = 0
+        
+        if side_b == 0: self.passes_b += 1
+        else: self.passes_b = 0
+        
         # Rewards
+        def get_pen(count):
+            return pass_penalty * (1.0 + 0.5 * (count - 1))
+            
         def calc_reward(side, size):
-            if side == 0: return 0.0
             if side == 1: return size * (self.true_sum - p_exec_buy)
             if side == -1: return size * (p_exec_sell - self.true_sum)
             return 0.0
             
-        r_a = calc_reward(side_a, size_a)
-        r_b = calc_reward(side_b, size_b)
+        if side_a == 0: r_a = -get_pen(self.passes_a)
+        else: r_a = calc_reward(side_a, size_a)
+        
+        if side_b == 0: r_b = -get_pen(self.passes_b)
+        else: r_b = calc_reward(side_b, size_b)
         
         # Update State
         self.W_a += r_a
@@ -240,16 +272,16 @@ class TwoPlayerCardEnv(gym.Env):
             terminated = True
             
         # Info
-        # Include masks so that downstream agents (e.g. IPPO) can always
-        # access valid-action masks, even on terminal transitions.
         step_info = {
             "exec_price_buy": p_exec_buy,
             "exec_price_sell": p_exec_sell,
             "q_buy_total": q_buy,
             "q_sell_total": q_sell,
             "true_sum": self.true_sum,
-            "mask_a": mask_a,
-            "mask_b": mask_b
+            "mask_a": self._get_mask(0),
+            "mask_b": self._get_mask(1),
+            "passes_a": self.passes_a,
+            "passes_b": self.passes_b
         }
         
         # Logs

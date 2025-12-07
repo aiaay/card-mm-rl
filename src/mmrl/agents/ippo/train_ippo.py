@@ -1,7 +1,7 @@
 import argparse
+import os
 import numpy as np
 import torch
-import os
 from torch.utils.tensorboard import SummaryWriter
 from mmrl.env.two_player_env import TwoPlayerCardEnv
 from mmrl.agents.ippo.ippo_agent import IPPOAgent
@@ -16,9 +16,15 @@ def main():
     args = parser.parse_args()
     
     cfg = {
-        "episode_length": 10,
+        # Longer horizon to give more trading opportunities
+        "episode_length": 20,
         "W0": 500.0,
-        "flags": {"enable_events": True, "enable_impact": True}
+        # Start with impact off to reduce early penalties; enable_events stays on
+        "flags": {"enable_events": True, "enable_impact": False},
+        # Softer stop-out to avoid early termination during exploration
+        "stop_out": 0.1,
+        # Incentive to trade
+        "pass_penalty": 0.05
     }
     
     env = TwoPlayerCardEnv(cfg)
@@ -28,10 +34,16 @@ def main():
     agent_cfg = {
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "lr": 3e-4,
-        "rollout_steps": 2048,
-        "train_iters": 4,
+        # Smaller rollouts + more frequent updates to react faster
+        "rollout_steps": 1024,
+        "train_iters": 6,
         "gamma": 0.99,
-        "gae_lambda": 0.95
+        "gae_lambda": 0.95,
+        # Encourage exploration
+        "entropy_coef": 0.02,
+        # Leave clip/value defaults; can tune further if needed
+        "clip_ratio": 0.2,
+        "value_coef": 0.5,
     }
     
     # Shared policy for both agents
@@ -130,6 +142,13 @@ def main():
     
     writer.close()
     print(f"IPPO Training finished. Logs: {args.log_dir}, Models: {args.checkpoint_dir}")
+
+    # Save shared actor-critic weights
+    save_dir = os.path.join("data", "models", "ippo")
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = os.path.join(save_dir, "ippo_final.pt")
+    torch.save(agent_a.ac.state_dict(), save_path)
+    print(f"Saved IPPO model to {save_path}")
 
 if __name__ == "__main__":
     main()
