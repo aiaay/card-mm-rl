@@ -57,25 +57,59 @@ python scripts/eval_baselines.py --n-episodes 100
 ```
 Results saved to `data/results/baselines.csv`.
 
-**Evaluate Trained RL Agents**:
+**Evaluate RL Agents vs Baselines**:
 ```bash
+# Test IPPO against all baselines
+python -m mmrl.eval.compare_agents --agent ippo --episodes 100
+
+# Test MAPPO against all baselines  
+python -m mmrl.eval.compare_agents --agent mappo --episodes 100
+
+# Or use the simplified script (tests against random only)
 python scripts/eval_all.py --n-episodes 100 --output data/results/eval_all.csv
 ```
 
-This runs 100 test episodes for each agent and saves metrics (Return, Sharpe, etc.) to CSV.
+**Evaluate RL Agents Against Each Other** (NEW!):
+```bash
+# Test all trained agents against each other (self-play + cross-play)
+python scripts/eval_rl_vs_rl.py --agents ippo mappo --episodes 100
+
+# Test specific matchup: IPPO vs MAPPO
+python -m mmrl.eval.compare_agents --agent ippo --opponent mappo --episodes 100
+
+# Self-play: IPPO vs IPPO
+python -m mmrl.eval.compare_agents --agent ippo --opponent ippo --episodes 100
+
+# Run all evaluations at once
+bash scripts/run_all_evaluations.sh
+```
+
+This runs test episodes and saves metrics (Return, Sharpe, Win rates) to CSV files in `data/results/`.
 
 ### 4. Compare Results
 
 ```bash
-cat data/results/eval_all.csv
+# View baseline results
+cat data/results/baselines.csv
+
+# View RL vs RL results
+cat data/results/rl_vs_rl.csv
 ```
 
 Or load in Python/Jupyter for analysis:
 ```python
 import pandas as pd
-df = pd.read_csv("data/results/eval_all.csv")
-print(df)
+
+# Compare baselines
+baselines = pd.read_csv("data/results/baselines.csv")
+print(baselines)
+
+# Compare RL agents
+rl_vs_rl = pd.read_csv("data/results/rl_vs_rl.csv")
+print(rl_vs_rl)
 ```
+
+**See [docs/evaluation_guide.md](docs/evaluation_guide.md) for comprehensive evaluation documentation.**
 
 ---
 
