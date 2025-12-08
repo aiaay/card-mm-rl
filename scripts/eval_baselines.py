@@ -10,7 +10,9 @@ import os
 from mmrl.env.single_env import SingleCardEnv
 from mmrl.baselines.random_valid import RandomValidAgent
 from mmrl.baselines.ev_oracle import EVOracleAgent
+from mmrl.baselines.ev_realistic import EVRealisticAgent
 from mmrl.baselines.level1_crowding import Level1Policy
+from mmrl.baselines.level1_realistic import Level1RealisticPolicy
 
 def evaluate_baseline(agent, agent_name: str, cfg: dict, n_episodes: int = 100, seed: int = 42):
     """
@@ -86,16 +88,25 @@ def main():
     random_agent = RandomValidAgent()
     results.append(evaluate_baseline(random_agent, "Random", cfg, args.n_episodes))
     
-    # 2. EV Oracle
-    print("2. EV Oracle (Level-0)...")
+    # 2. EV Oracle (privileged - knows true mu)
+    print("2. EV Oracle (Level-0, privileged)...")
     oracle_agent = EVOracleAgent()
     results.append(evaluate_baseline(oracle_agent, "EV_Oracle", cfg, args.n_episodes))
     
-    # 3. Level-1 Crowding (Single player has no opponent, so it behaves like EV Oracle)
-    # Level1Policy is designed for two-player but can run in single-player mode
-    print("3. Level-1 Crowding...")
+    # 3. EV Realistic (no privileged info - computes fair value from obs only)
+    print("3. EV Realistic (no privileged info)...")
+    realistic_agent = EVRealisticAgent(alpha=0.15)
+    results.append(evaluate_baseline(realistic_agent, "EV_Realistic", cfg, args.n_episodes))
+    
+    # 4. Level-1 Crowding (privileged - uses info["mu"])
+    print("4. Level-1 Crowding (privileged)...")
     level1_agent = Level1Policy(history_len=10, alpha=0.3)
     results.append(evaluate_baseline(level1_agent, "Level1", cfg, args.n_episodes))
+    
+    # 5. Level-1 Realistic (no privileged info)
+    print("5. Level-1 Realistic (no privileged info)...")
+    level1_realistic_agent = Level1RealisticPolicy(history_len=10, alpha=0.15)
+    results.append(evaluate_baseline(level1_realistic_agent, "Level1_Realistic", cfg, args.n_episodes))
     
     # Save results
     df = pd.DataFrame(results)

@@ -19,8 +19,30 @@ python scripts/eval_baselines.py --n-episodes 100 --output data/results/baseline
 
 This tests:
 - **Random Valid**: Random action selection from valid actions
-- **EV Oracle**: Perfect information baseline (knows true fair value)
-- **Level-1**: Strategic baseline accounting for opponent behavior
+- **EV Oracle** (privileged): Perfect information baseline (knows true fair value from environment)
+- **EV Realistic** (no privileged info): Bayesian baseline using only observable data
+- **Level-1** (privileged): Strategic baseline with opponent modeling (uses `info["mu"]`)
+- **Level-1 Realistic** (no privileged info): Strategic baseline with opponent modeling, computing fair value from observable data only
+
+### Baseline Performance Hierarchy (Expected)
+
+**Privileged Baselines** (theoretical upper bounds):
+1. **EV Oracle** (strongest) - Perfect information
+2. **Level-1** - Strategic with perfect fair value
+
+**Realistic Baselines** (achievable without cheating):
+3. **Level-1 Realistic** - Strategic with Bayesian fair value
+4. **EV Realistic** - Bayesian without opponent modeling
+5. **Trained RL Agents** - Should approach Level-1 Realistic
+6. **Random Valid** (weakest) - Baseline floor
+
+### Why Two Hierarchies?
+
+The gap between privileged and realistic baselines represents the **information asymmetry cost**:
+- EV Oracle vs EV Realistic: Cost of not knowing true μ
+- Level-1 vs Level-1 Realistic: Cost of computing vs knowing μ
+
+RL agents should aim to match realistic baselines, not privileged ones.
 
 ## 2. Evaluating RL Agents vs Baselines
 

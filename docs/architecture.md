@@ -47,8 +47,10 @@ card-mm-rl/
 │   │   └── logging_hooks.py         # Structured logging utilities
 │   ├── baselines/
 │   │   ├── random_valid.py          # Random valid action policy
-│   │   ├── ev_oracle.py             # Level-0 EV oracle policy
-│   │   └── level1_crowding.py       # Level-1 crowd-aware policy
+│   │   ├── ev_oracle.py             # Level-0 EV oracle policy (privileged)
+│   │   ├── ev_realistic.py          # Bayesian baseline (no privileged info)
+│   │   ├── level1_crowding.py       # Level-1 crowd-aware policy (privileged)
+│   │   └── level1_realistic.py      # Level-1 realistic (no privileged info)
 │   ├── agents/
 │   │   ├── common/
 │   │   │   ├── nets.py              # MLP neural network module
@@ -340,22 +342,58 @@ class RandomValidAgent:
 
 ### 5.2 EV Oracle Level-0 (`ev_oracle.py`)
 
-Uses privileged access to posterior mean `mu`:
+Uses **privileged access** to posterior mean `mu`:
 - Buy max valid size if `mu - Y > 0` and edge is positive
 - Sell max valid size if `X - mu > 0` and edge is larger
 - Otherwise Pass
+
+⚠️ **Note**: This baseline "cheats" by knowing the true fair value from the environment.
 
 ```python
 class EVOracleAgent:
     def act(self, obs, mask, info=None, eval_mode=True) -> int
 ```
 
-### 5.3 Level-1 Crowding-Aware (`level1_crowding.py`)
+### 5.3 EV Realistic (`ev_realistic.py`)
 
-Extends Level-0 with opponent modeling:
+**No privileged information**. Computes fair value using only observable data:
+- Decodes hints and event from observation vector
+- Computes Bayesian posterior `E[S | hints, event]` using standard probability
+- Handles market impact by computing expected overflow given displayed depth
+
+**Without impact**:
+```
+edge = max(mu - Y, X - mu)
+```
+Buy if `mu - Y > 0` is larger, Sell if `X - mu > 0` is larger.
+
+**With impact** (Tier-2 liquidity):
+```
+E[p_exec_buy] = Y + α × E[(size - L_true)+ | D_disp]
+edge_buy(i) = i × (mu - E[p_exec_buy])
+```
+
+Selects size that maximizes expected edge while respecting budget constraints.
+
+**Key Feature**: Uses `D_disp = min(L_true, L_cap)` to reason about hidden liquidity:
+- If `D_disp < L_cap`: True depth is known exactly (`L_true = D_disp`)
+- If `D_disp = L_cap`: True depth is uncertain (`L_true >= L_cap`), integrates over truncated distribution
+
+```python
+class EVRealisticAgent:
+    def __init__(self, alpha=0.15, liq_cfg=None)
+    def act(self, obs, mask, info=None, eval_mode=True) -> int
+    def get_fair_value(self, obs) -> (mu, sigma)
+```
+
+### 5.4 Level-1 Crowding-Aware (`level1_crowding.py`) - Privileged
+
+Uses **privileged access** to `mu` plus opponent modeling:
 - Tracks opponent action history
 - Estimates expected opponent demand on same side
 - Adjusts size to avoid overflow/impact
+
+⚠️ **Note**: Uses `info["mu"]` (privileged).
 
 ```python
 class Level1Policy:
@@ -363,6 +401,42 @@ class Level1Policy:
     def update(self, opp_side, opp_size)  # Call after each round
     def act(self, obs, mask, info=None) -> int
 ```
+
+### 5.5 Level-1 Realistic (`level1_realistic.py`) - No Privileged Info
+
+**No privileged information**. Combines:
+- Bayesian fair value estimation (like EV Realistic)
+- Opponent modeling through action history tracking
+- Expected impact calculation with uncertain liquidity
+- Risk-adjusted edge computation
+
+**Key Features**:
+- Computes fair value from observable data only
+- Tracks opponent history to estimate crowding probability
+- Uses expected overflow calculation for hidden depth
+- Includes risk aversion parameter for uncertainty handling
+
+```python
+class Level1RealisticPolicy:
+    def __init__(self, history_len=10, alpha=0.15, risk_aversion=0.5)
+    def update(self, opp_side, opp_size)  # Track opponent
+    def reset()  # Clear history (episode start)
+    def act(self, obs, mask, info=None) -> int
+    def get_fair_value(obs) -> (mu, sigma)
+    def get_opponent_estimate(side) -> (demand, uncertainty)
+```
+
+---
+
+## 5.6 Baseline Summary Table
+
+| Baseline | Privileged Info | Opponent Model | Use Case |
+|----------|-----------------|----------------|----------|
+| Random | None | No | Lower bound |
+| EV Oracle | mu, true_depths | No | Upper bound |
+| EV Realistic | None | No | Realistic single-agent bound |
+| Level-1 | mu | Yes | Strategic upper bound |
+| Level-1 Realistic | None | Yes | Realistic strategic bound |
 
 ---
 

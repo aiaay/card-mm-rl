@@ -16,7 +16,9 @@ from mmrl.agents.mappo.mappo_agent import MAPPOAgent
 
 from mmrl.baselines.random_valid import RandomValidAgent
 from mmrl.baselines.ev_oracle import EVOracleAgent
+from mmrl.baselines.ev_realistic import EVRealisticAgent
 from mmrl.baselines.level1_crowding import Level1Policy
+from mmrl.baselines.level1_realistic import Level1RealisticPolicy
 
 
 # -------- Helpers --------
@@ -167,7 +169,7 @@ def run_matchup_two_player(rl_agent, agent_type: str, opponent, cfg: Dict[str, A
             else:  # ippo
                 act_a, _, _ = rl_agent.step(obs_a, mask_a)
 
-            if isinstance(opponent, (EVOracleAgent, Level1Policy)):
+            if isinstance(opponent, (EVOracleAgent, EVRealisticAgent, Level1Policy, Level1RealisticPolicy)):
                 act_b = opponent.act(obs_b, mask_b, info=info)
             else:
                 act_b = opponent.act(obs_b, mask_b)
@@ -198,7 +200,9 @@ def evaluate_two_player(agent_type: str, rl_agent, cfg: Dict[str, Any], n_episod
     baselines = {
         "random_valid": RandomValidAgent(),
         "ev_oracle": EVOracleAgent(),
+        "ev_realistic": EVRealisticAgent(),
         "level1": Level1Policy(),
+        "level1_realistic": Level1RealisticPolicy(),
     }
     rows = []
     for name, opp in baselines.items():
@@ -384,7 +388,9 @@ def main():
             "dqn": rl_agent,
             "random_valid": RandomValidAgent(),
             "ev_oracle": EVOracleAgent(),
+            "ev_realistic": EVRealisticAgent(),
             "level1": Level1Policy(),
+            "level1_realistic": Level1RealisticPolicy(),
         }
         df = evaluate_single_agents(agents, single_cfg, args.episodes, args.seed)
     elif args.agent in ["ippo", "mappo"]:
