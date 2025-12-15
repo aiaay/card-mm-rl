@@ -1,4 +1,4 @@
-# Card-Sum Market Making RL
+# Card-Sum Market Taking RL
 
 A reproducible research codebase for studying market-taking strategies in a stylized card-sum market with realistic microstructure (Tier-2 liquidity, impact, events).
 

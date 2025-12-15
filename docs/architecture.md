@@ -7,7 +7,7 @@ A reproducible research codebase for studying market-taking strategies in a styl
 - **Gymnasium-style simulators**: Single-player (`SingleCardEnv`) and two-player (`TwoPlayerCardEnv`) environments with Tier-2 liquidity (displayed vs. hidden depth, slippage/impact).
 - **Baselines**: Random-Valid, Level-0 EV Oracle (myopic), Level-1 Crowding-Aware.
 - **RL Agents**: DQN (single-player), IPPO (two-player, shared policy), MAPPO (two-player, centralized critic).
-- **Evaluation**: Mean P&L, variance, Sharpe ratio, ruin probability, valid-order rate, slippage tracking.
+- **Evaluation**: Mean P&L, variance, Sharpe ratio, ruin probability, valid-order rate, slippage tracking. 
 - **Human Play**: CLI interface for single-player or two-player (vs random opponent).
 - **Feature Toggles**: Events and market impact can be enabled/disabled for clean ablations.
 
@@ -768,6 +768,10 @@ tensorboard --logdir data/logs
 ```bash
 python -m mmrl.human.cli_play --mode single --events on --impact on
 python -m mmrl.human.cli_play --mode two --opponent random
+```
+
+```bash
+streamlit run src/mmrl/human/web_demo.py
 ```
 
 ---
