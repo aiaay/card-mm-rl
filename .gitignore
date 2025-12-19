@@ -45,6 +45,8 @@ coverage.xml
 .DS_Store
 
 # Project specific
+.github/
+docs/task.md
 data/logs/
 data/rollouts/
 data/results/
