@@ -1,4 +1,4 @@
-# Project Architecture: Card-Sum Market Making RL
+# Project Architecture: Card-Sum Market Taking RL
 
 ## 0) Purpose & Scope
 
@@ -347,7 +347,7 @@ Uses **privileged access** to posterior mean `mu`:
 - Sell max valid size if `X - mu > 0` and edge is larger
 - Otherwise Pass
 
-⚠️ **Note**: This baseline "cheats" by knowing the true fair value from the environment.
+**Note**: This baseline "cheats" by knowing the true fair value from the environment.
 
 ```python
 class EVOracleAgent:
@@ -393,7 +393,7 @@ Uses **privileged access** to `mu` plus opponent modeling:
 - Estimates expected opponent demand on same side
 - Adjusts size to avoid overflow/impact
 
-⚠️ **Note**: Uses `info["mu"]` (privileged).
+**Note**: Uses `info["mu"]` (privileged).
 
 ```python
 class Level1Policy:
